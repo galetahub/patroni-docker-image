@@ -18,43 +18,45 @@ The complete stack is:
 
 https://pgtune.leopard.in.ua/#/
 
-## Setup servers (nodes)
+## Configudation
 
-Manager node:
+### Patroni Environment Variables
 
-```
-docker swarm init
-docker swarm join-token worker -q
-docker node inspect NODEID --format "{{ .ManagerStatus.Addr }}"
-```
+| Name | Description | Default |
+|------|-------------|---------|
+| `PATRONI_SCOPE` | Cluster name/scope for Patroni | `batman` |
+| `PATRONI_NAME` | Name of the Patroni node | `$(hostname)` |
+| `PATRONI_POSTGRESQL_DATA_DIR` | PostgreSQL data directory | `$PGDATA` |
+| `PATRONI_POSTGRESQL_LISTEN` | PostgreSQL listen address | `0.0.0.0:5432` |
+| `PATRONI_POSTGRESQL_CONNECT_ADDRESS` | PostgreSQL connect address | `$DOCKER_IP:5432` |
+| `PATRONI_RESTAPI_LISTEN` | Patroni REST API listen address | `0.0.0.0:8008` |
+| `PATRONI_RESTAPI_CONNECT_ADDRESS` | Patroni REST API connect address | `$DOCKER_IP:8008` |
+| `PATRONI_REPLICATION_USERNAME` | Username for replication | `replicator` |
+| `PATRONI_POSTGRESQL_PGPASS` | Path to .pgpass file | `/opt/postgres/.pgpass` |
+| `PATRONI_CONFIG_PATH` | Path to Patroni configuration file | `/opt/postgres/config/postgres.yml` |
 
-## Create network
+### PostgreSQL Environment Variables
 
-```
-docker network create -d overlay --attachable pg-cluster-net
-```
+| Name | Description | Default |
+|------|-------------|---------|
+| `PG_SHARED_BUFFERS` | Amount of memory for shared buffers | `2GB` |
+| `PG_EFFECTIVE_CACHE_SIZE` | Planner's assumption about kernel cache size | `6GB` |
+| `PG_MAINTENANCE_WORK_MEM` | Memory for maintenance operations | `512MB` |
+| `PG_CHECKPOINT_COMPLETION_TARGET` | Target for checkpoint completion | `0.7` |
+| `PG_WAL_BUFFERS` | Amount of memory for WAL buffers | `16MB` |
+| `PG_DEFAULT_STATISTICS_TARGET` | Default statistics target for columns | `100` |
+| `PG_RANDOM_PAGE_COST` | Cost of a non-sequentially-fetched disk page | `1.1` |
+| `PG_EFFECTIVE_IO_CONCURRENCY` | Number of concurrent disk I/O operations | `200` |
+| `PG_WORK_MEM` | Memory for query operations | `16MB` |
+| `PG_MIN_WAL_SIZE` | Minimum size to shrink the WAL to | `1GB` |
+| `PG_MAX_WAL_SIZE` | Maximum size to let the WAL grow to | `4GB` |
+| `PG_MAX_WORKER_PROCESSES` | Maximum number of background processes | `2` |
+| `PG_MAX_PARALLEL_WORKERS_PER_GATHER` | Maximum parallel workers per gather node | `1` |
+| `PG_MAX_PARALLEL_WORKERS` | Maximum number of parallel workers | `2` |
+| `PG_UNIX_SOCKET_DIRECTORIES` | Directory for Unix socket | `/tmp` |
+| `PG_MAX_CONNECTIONS` | Maximum number of concurrent connections | `64` |
 
-```
-docker swarm init --advertise-addr 10.8.0.1
-docker network create -d overlay --attachable pg-cluster-net
-```
 
-## Add labels
-
-All actions at swarm manager node:
-
-```
-docker node ls
-docker node update --label-add name=node1 <node_id1>
-docker node update --label-add name=node2 <node_id2>
-docker node update --label-add name=node3 <node_id3>
-```
-
-## Start cluster
-
-```
-docker stack deploy -c docker-compose.yml batman
-```
 
 ## Backup database
 
@@ -83,13 +85,6 @@ sysctl -w net.ipv4.tcp_max_syn_backlog=100000
 sysctl -w net.core.netdev_max_backlog=100000
 sysctl -w net.core.somaxconn=65534
 sysctl -w net.ipv4.tcp_syncookies=0
-```
-
-## Delete stack
-
-```
-docker stack rm batman
-docker system prune -a
 ```
 
 ## Links
