@@ -112,4 +112,6 @@ docker system prune -a
 
   - https://pgtune.leopard.in.ua/
 
-Copyright (c) 2025
+## License
+
+This repository is licensed under the [MIT License](LICENSE)
