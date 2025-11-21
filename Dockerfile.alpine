@@ -1,30 +1,32 @@
 ARG GOLANG_VERSION=1.23.6
 ARG ALPINE_VERSION=3.21
 ARG POSTGRES_VERSION=17.7
-# 1 - Setup image
-FROM golang:$GOLANG_VERSION-alpine$ALPINE_VERSION AS setup
 
-## Set ENV variables
+# 1 - Build wal-g from source (works for both amd64 and arm64)
+FROM golang:$GOLANG_VERSION-alpine$ALPINE_VERSION AS builder
+
 ENV GOPATH=/go \
     GOBIN=/usr/local/bin \
-    CGO_LDFLAGS='-no-pie' \
+    CGO_ENABLED=1 \
+    CGO_CFLAGS="-D_LARGEFILE64_SOURCE" \
     USE_BROTLI=1 \
     USE_LZO=1
 
 ARG WALG_VERSION=3.0.7
 
-RUN set -ex  \
+RUN set -ex \
     && apk update \
     && apk upgrade \
-    && apk --no-cache add --virtual .build-deps git cmake build-base bash wget lzo lzo-dev brotli brotli-dev \
-    && git clone https://github.com/wal-g/wal-g $GOPATH/src/github.com/wal-g/wal-g \
+    && apk --no-cache add \
+        git cmake build-base bash \
+        lzo-dev brotli-dev brotli-static brotli-libs \
+        musl-dev gcc g++ \
+    && git clone --depth 1 --branch v${WALG_VERSION} https://github.com/wal-g/wal-g $GOPATH/src/github.com/wal-g/wal-g \
     && cd $GOPATH/src/github.com/wal-g/wal-g \
-    && git checkout tags/v$WALG_VERSION -b build \
-    && make pg_clean \
     && make deps \
-    && make pg_install \
-    && $GOBIN/wal-g --version \
-    && apk del .build-deps
+    && make pg_build \
+    && cp main/pg/wal-g /usr/local/bin/wal-g \
+    && chmod +x /usr/local/bin/wal-g
 
 # 2 - Base image
 FROM postgres:$POSTGRES_VERSION-alpine$ALPINE_VERSION AS base
@@ -36,7 +38,7 @@ ARG PATRONI_VERSION=4.1.0
 RUN apk update \
     && apk upgrade \
     && apk --no-cache add --virtual .build-deps git gcc g++ make musl-dev gettext \
-    && apk --no-cache add --virtual .run-deps linux-headers curl jq python3 python3-dev py3-pip dumb-init \
+    && apk --no-cache add --virtual .run-deps linux-headers curl jq python3 python3-dev py3-pip lzo brotli-libs dumb-init \
     # Install envsubst command for replacing config files in system startup
     # - it needs libintl package
     # - only weights 100KB combined with it's libraries
@@ -44,7 +46,7 @@ RUN apk update \
     && mv /usr/bin/envsubst /usr/local/bin/envsubst \
     # Create and activate virtual environment
     && python3 -m venv /opt/venv \
-    && source /opt/venv/bin/activate \
+    && . /opt/venv/bin/activate \
     # Install patroni and its dependencies
     && pip3 install --upgrade pip setuptools \
     && pip3 install --upgrade patroni[psycopg3,etcd3,aws]==$PATRONI_VERSION \
@@ -54,7 +56,7 @@ RUN apk update \
 FROM base AS runtime
 
 ## Copy wal-g
-COPY --from=setup /usr/local/bin/wal-g /usr/local/bin/wal-g
+COPY --from=builder /usr/local/bin/wal-g /usr/local/bin/wal-g
 
 # Copy wait script to the image
 # https://github.com/ufoscout/docker-compose-wait

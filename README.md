@@ -14,10 +14,6 @@ The complete stack is:
   - pgbouncer (https://github.com/pgbouncer/pgbouncer)
   - wal-g (https://github.com/wal-g/wal-g)
 
-## PG configuration
-
-https://pgtune.leopard.in.ua/#/
-
 ## Configudation
 
 ### Patroni Environment Variables
@@ -55,6 +51,10 @@ https://pgtune.leopard.in.ua/#/
 | `PG_MAX_PARALLEL_WORKERS` | Maximum number of parallel workers | `2` |
 | `PG_UNIX_SOCKET_DIRECTORIES` | Directory for Unix socket | `/tmp` |
 | `PG_MAX_CONNECTIONS` | Maximum number of concurrent connections | `64` |
+
+Calculate configuration for PostgreSQL based on the maximum performance for a given hardware configuration:
+
+https://pgtune.leopard.in.ua/#/
 
 ### Notifications Environment Variables
 
