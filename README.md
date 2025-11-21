@@ -56,7 +56,12 @@ https://pgtune.leopard.in.ua/#/
 | `PG_UNIX_SOCKET_DIRECTORIES` | Directory for Unix socket | `/tmp` |
 | `PG_MAX_CONNECTIONS` | Maximum number of concurrent connections | `64` |
 
+### Notifications Environment Variables
 
+| Name | Description | Default |
+|------|-------------|---------|
+| `TELEGRAM_API_TOKEN` | Telegram bot API token for sending notifications | - |
+| `TELEGRAM_CHAT_ID` | Telegram chat ID where notifications will be sent | - |
 
 ## Backup database
 
