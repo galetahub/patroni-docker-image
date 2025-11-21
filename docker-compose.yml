@@ -1,0 +1,157 @@
+version: '3.8'
+services:
+  etcd1: &etcd
+    image: bitnami/etcd:3.5.21
+    environment:
+      ETCD_NAME: etcd1
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://etcd1:2380
+      ETCD_ADVERTISE_CLIENT_URLS: http://etcd1:2379
+    env_file:
+      - ./config/etcd/etcd.env
+    volumes:
+      - etcd-data:/var/lib/etcd
+    networks:
+      - dbs
+    deploy: &deploy_node1
+      placement:
+        constraints:
+          - node.labels.name == node1
+      restart_policy:
+        condition: on-failure
+    logging: &logging
+      driver: "json-file"
+      options:
+          max-size: "10m"
+
+  etcd2:
+    << : *etcd
+    environment:
+      ETCD_NAME: etcd2
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://etcd2:2380
+      ETCD_ADVERTISE_CLIENT_URLS: http://etcd2:2379
+    deploy: &deploy_node2
+      placement:
+        constraints:
+          - node.labels.name == node2
+      restart_policy:
+        condition: on-failure
+
+  etcd3:
+    << : *etcd
+    environment:
+      ETCD_NAME: etcd3
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://etcd3:2380
+      ETCD_ADVERTISE_CLIENT_URLS: http://etcd3:2379
+    deploy: &deploy_node3
+      placement:
+        constraints:
+          - node.labels.name == node3
+      restart_policy:
+        condition: on-failure
+
+  pgbouncer1: &pgbouncer
+    image: bitnami/pgbouncer:1.24.0
+    env_file:
+      - ./config/pgbouncer/pgbouncer.env
+    environment:
+      POSTGRESQL_HOST: patroni1
+    networks:
+      - dbs
+    configs:
+      - source: userlist.txt
+        target: /bitnami/pgbouncer/userlists.txt
+    deploy: *deploy_node1
+    logging: *logging
+    depends_on:
+      - patroni1
+      - patroni2
+      - patroni3
+
+  pgbouncer2:
+    << : *pgbouncer
+    environment:
+      POSTGRESQL_HOST: patroni2
+    deploy: *deploy_node2
+
+  pgbouncer3:
+    << : *pgbouncer
+    environment:
+      POSTGRESQL_HOST: patroni3
+    deploy: *deploy_node3
+
+  patroni1: &patroni
+    image: galatehub/patroni:latest
+    environment:
+      PATRONI_NAME: patroni1
+      POSTGRES_PASSWORD: ${POSTGRESQL_PASSWORD}
+      PATRONI_REPLICATION_PASSWORD: ${PATRONI_REPLICATION_PASSWORD}
+      PATRONI_RESTAPI_PASSWORD: ${PATRONI_RESTAPI_PASSWORD}
+      PATRONI_SUPERUSER_PASSWORD: ${PATRONI_SUPERUSER_PASSWORD}
+    env_file:
+      - ./config/patroni/patroni.env
+      - ./config/patroni/postgres.env
+      - ./config/walg/walg.env
+    volumes:
+      - postgres-data:/opt/postgres/data
+      - type: tmpfs
+        target: /dev/shm
+        tmpfs:
+          size: 4096000000 # (this means 4GB)
+    networks:
+      - dbs
+    deploy: *deploy_node1
+    logging: *logging
+    depends_on:
+      - etcd1
+      - etcd2
+      - etcd3
+
+  patroni2:
+    << : *patroni
+    environment:
+      PATRONI_NAME: patroni2
+      POSTGRES_PASSWORD: ${POSTGRESQL_PASSWORD}
+      PATRONI_REPLICATION_PASSWORD: ${PATRONI_REPLICATION_PASSWORD}
+      PATRONI_RESTAPI_PASSWORD: ${PATRONI_RESTAPI_PASSWORD}
+      PATRONI_SUPERUSER_PASSWORD: ${PATRONI_SUPERUSER_PASSWORD}
+    deploy: *deploy_node2
+
+  patroni3:
+    << : *patroni
+    environment:
+      PATRONI_NAME: patroni3
+      POSTGRES_PASSWORD: ${POSTGRESQL_PASSWORD}
+      PATRONI_REPLICATION_PASSWORD: ${PATRONI_REPLICATION_PASSWORD}
+      PATRONI_RESTAPI_PASSWORD: ${PATRONI_RESTAPI_PASSWORD}
+      PATRONI_SUPERUSER_PASSWORD: ${PATRONI_SUPERUSER_PASSWORD}
+    deploy: *deploy_node3
+
+  haproxy:
+    image: haproxy:3.1-alpine
+    networks:
+      - dbs
+    configs:
+      - source: haproxy.cfg
+        target: /usr/local/etc/haproxy/haproxy.cfg
+    deploy:
+      mode: global
+    logging: *logging
+    depends_on:
+      - patroni1
+      - patroni2
+      - patroni3
+
+volumes:
+  postgres-data:
+  etcd-data:
+
+networks:
+  dbs:
+    name: pg-cluster-net
+    external: true
+
+configs:
+  haproxy.cfg:
+    file: ./config/haproxy/haproxy.cfg
+  userlist.txt:
+    file: ./config/pgbouncer/userlist.txt
