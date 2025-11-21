@@ -1,4 +1,4 @@
-ARG GOLANG_VERSION=1.23.6
+ARG GOLANG_VERSION=1.25
 ARG ALPINE_VERSION=3.21
 ARG POSTGRES_VERSION=17.7
 
@@ -7,8 +7,6 @@ FROM golang:$GOLANG_VERSION-alpine$ALPINE_VERSION AS builder
 
 ENV GOPATH=/go \
     GOBIN=/usr/local/bin \
-    CGO_ENABLED=1 \
-    CGO_CFLAGS="-D_LARGEFILE64_SOURCE" \
     USE_BROTLI=1 \
     USE_LZO=1
 
@@ -17,16 +15,19 @@ ARG WALG_VERSION=3.0.7
 RUN set -ex \
     && apk update \
     && apk upgrade \
-    && apk --no-cache add \
-        git cmake build-base bash \
-        lzo-dev brotli-dev brotli-static brotli-libs \
+    && apk --no-cache add --virtual .build-deps \
+        git make cmake build-base bash \
+        brotli-dev lzo-dev libsodium-dev \
         musl-dev gcc g++ \
     && git clone --depth 1 --branch v${WALG_VERSION} https://github.com/wal-g/wal-g $GOPATH/src/github.com/wal-g/wal-g \
     && cd $GOPATH/src/github.com/wal-g/wal-g \
+    && git submodule update --init --recursive \
+    && sed -i 's|go build -mod vendor -tags .* -o wal-g -ldflags.*|go build -mod vendor -tags "brotli lzo" -o wal-g -ldflags "-s -w -X github.com/wal-g/wal-g/cmd/pg.buildDate=`date -u +%Y.%m.%d_%H:%M:%S` -X github.com/wal-g/wal-g/cmd/pg.walgVersion='"$WALG_VERSION"'" )|' Makefile \
     && make deps \
-    && make pg_build \
-    && cp main/pg/wal-g /usr/local/bin/wal-g \
-    && chmod +x /usr/local/bin/wal-g
+    && make pg_install \
+    && $GOBIN/wal-g --version \
+    && apk del .build-deps \
+    && go clean -cache -modcache -fuzzcache -testcache
 
 # 2 - Base image
 FROM postgres:$POSTGRES_VERSION-alpine$ALPINE_VERSION AS base
@@ -38,7 +39,7 @@ ARG PATRONI_VERSION=4.1.0
 RUN apk update \
     && apk upgrade \
     && apk --no-cache add --virtual .build-deps git gcc g++ make musl-dev gettext \
-    && apk --no-cache add --virtual .run-deps linux-headers curl jq python3 python3-dev py3-pip lzo brotli-libs dumb-init \
+    && apk --no-cache add --virtual .run-deps linux-headers curl jq python3 python3-dev py3-pip dumb-init \
     # Install envsubst command for replacing config files in system startup
     # - it needs libintl package
     # - only weights 100KB combined with it's libraries
