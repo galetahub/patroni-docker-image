@@ -1,7 +1,7 @@
 version: '3.8'
 services:
   etcd1: &etcd
-    image: bitnami/etcd:3.5.21
+    image: quay.io/coreos/etcd:v3.5.21
     environment:
       ETCD_NAME: etcd1
       ETCD_INITIAL_ADVERTISE_PEER_URLS: http://etcd1:2380
@@ -50,16 +50,16 @@ services:
         condition: on-failure
 
   pgbouncer1: &pgbouncer
-    image: bitnami/pgbouncer:1.24.0
+    image: edoburu/pgbouncer:v1.24.1-p1
     env_file:
       - ./config/pgbouncer/pgbouncer.env
     environment:
-      POSTGRESQL_HOST: patroni1
+      DB_HOST: patroni1
     networks:
       - dbs
     configs:
       - source: userlist.txt
-        target: /bitnami/pgbouncer/userlists.txt
+        target: /etc/pgbouncer/userlist.txt
     deploy: *deploy_node1
     logging: *logging
     depends_on:
@@ -70,17 +70,17 @@ services:
   pgbouncer2:
     << : *pgbouncer
     environment:
-      POSTGRESQL_HOST: patroni2
+      DB_HOST: patroni2
     deploy: *deploy_node2
 
   pgbouncer3:
     << : *pgbouncer
     environment:
-      POSTGRESQL_HOST: patroni3
+      DB_HOST: patroni3
     deploy: *deploy_node3
 
   patroni1: &patroni
-    image: galatehub/patroni:latest
+    image: galetahub/patroni:latest
     environment:
       PATRONI_NAME: patroni1
       POSTGRES_PASSWORD: ${POSTGRESQL_PASSWORD}
